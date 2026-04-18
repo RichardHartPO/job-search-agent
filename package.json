@@ -1,4 +1,4 @@
-json{
+{
   "name": "job-search-agent",
   "version": "1.0.0",
   "description": "Automated job search agent for Richard",
