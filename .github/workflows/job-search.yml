@@ -1,22 +1,19 @@
-yamlname: Job Search Agent
+name: Job Search Agent
 
 on:
   schedule:
-    - cron: '0 * * * *'  # runs every hour
-  workflow_dispatch:      # allows manual run anytime
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   search:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
       - run: npm install
-      
       - run: node agent.js
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
