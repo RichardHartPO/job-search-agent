@@ -1,5 +1,4 @@
-Perfect. Click in the text area and paste all of this:
-javascriptconst Anthropic = require("@anthropic-ai/sdk");
+const Anthropic = require("@anthropic-ai/sdk"); 
 const nodemailer = require("nodemailer");
 const fs = require("fs");
 
