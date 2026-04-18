@@ -1,0 +1,13 @@
+json{
+  "name": "job-search-agent",
+  "version": "1.0.0",
+  "description": "Automated job search agent for Richard",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.20.0",
+    "nodemailer": "^6.9.0"
+  }
+}
