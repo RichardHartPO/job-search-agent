@@ -1,1 +1,116 @@
+Good — I have the full file content. Now click in the empty GitHub text area and paste this — I'm going to give it to you in one clean block. Select all of it starting from the very first < and ending at the very last >:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Agent Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; padding: 40px 24px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 28px; }
+  .card { background: white; border: 1px solid #e5e3de; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label { font-size: 11px; color: #888; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  input[type="text"], input[type="password"] { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; color: #1a1a1a; background: #fafafa; outline: none; }
+  input:focus { border-color: #999; background: white; }
+  button { padding: 9px 20px; border-radius: 8px; font-size: 13px; border: 1px solid #ddd; background: white; cursor: pointer; color: #1a1a1a; font-weight: 500; transition: all 0.15s; }
+  button:hover { background: #f5f4f0; border-color: #bbb; }
+  button.primary { background: #1a1a1a; color: white; border-color: #1a1a1a; }
+  button.primary:hover { background: #333; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .badge { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 20px; background: #f0efe9; color: #888; border: 1px solid #e5e3de; }
+  .badge.connected { background: #eaf5ee; color: #2d7a4a; border-color: #b8dfc7; }
+  .badge.error { background: #fdecea; color: #c0392b; border-color: #f5b7b1; }
+  .lists-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .list-box { background: white; border: 1px solid #e5e3de; border-radius: 12px; padding: 20px 24px; }
+  .list-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .list-title { font-size: 13px; font-weight: 600; }
+  .list-count { font-size: 11px; color: #999; }
+  .company-list { max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
+  .company-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; font-size: 13px; transition: background 0.1s; }
+  .company-row:hover { background: #f5f4f0; }
+  .remove-btn { background: none; border: none; cursor: pointer; color: #ccc; font-size: 16px; padding: 0 4px; line-height: 1; border-radius: 4px; }
+  .remove-btn:hover { color: #c0392b; background: #fdecea; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row input { flex: 1; }
+  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+  .save-status { font-size: 12px; color: #888; }
+  .note { font-size: 11px; color: #aaa; margin-top: 8px; line-height: 1.6; }
+  .header-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header-row">
+    <h1>Job Agent Editor</h1>
+    <span class="badge" id="status-badge">not connected</span>
+  </div>
+  <p class="subtitle">Manage your target companies and sync changes to GitHub — your agent updates automatically.</p>
+  <div class="card">
+    <p class="card-title">GitHub connection</p>
+    <div class="grid-2" style="margin-bottom: 12px;">
+      <div>
+        <label>Personal access token</label>
+        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" />
+      </div>
+      <div>
+        <label>Repository</label>
+        <input type="text" id="gh-repo" value="RichardHartPO/job-search-agent" />
+      </div>
+    </div>
+    <button onclick="connectGitHub()">Connect to GitHub</button>
+    <p class="note">Token needs repo scope. Get yours at github.com/settings/tokens</p>
+  </div>
+  <div class="lists-grid" style="margin-bottom: 16px;">
+    <div class="list-box">
+      <div class="list-header">
+        <span class="list-title">Dream companies</span>
+        <span class="list-count" id="dream-count">0 companies</span>
+      </div>
+      <div class="company-list" id="dream-list"></div>
+      <div class="add-row">
+        <input type="text" id="dream-input" placeholder="Add company..." onkeydown="if(event.key==='Enter') addCompany('dream')" />
+        <button onclick="addCompany('dream')">Add</button>
+      </div>
+    </div>
+    <div class="list-box">
+      <div class="list-header">
+        <span class="list-title">Stability companies</span>
+        <span class="list-count" id="stability-count">0 companies</span>
+      </div>
+      <div class="company-list" id="stability-list"></div>
+      <div class="add-row">
+        <input type="text" id="stability-input" placeholder="Add company..." onkeydown="if(event.key==='Enter') addCompany('stability')" />
+        <button onclick="addCompany('stability')">Add</button>
+      </div>
+    </div>
+  </div>
+  <div class="save-row">
+    <button class="primary" onclick="saveToGitHub()" id="save-btn" disabled>Save to GitHub</button>
+    <span class="save-status" id="save-status"></span>
+  </div>
+</div>
+<script>
+const DREAM_DEFAULT = ["New York Magazine","The Atlantic","New Yorker","Assouline","Phaidon","Rizzoli","Apartamento","Monocle","MIT Press","Princeton Architectural Press","Berggruen Institute","Getty","MoMA","Whitney Museum","Guggenheim","Cooper Hewitt","Smithsonian","MacArthur Foundation","Mellon Foundation","Aesop","Ace Hotel","Soho House","Kinfolk","Hem","Pentagram","2x4","OMA","Bloomberg Media","Reuters","Anthropic"];
+const STABILITY_DEFAULT = ["Berkeley Research Group","Keystone Strategy","Ankura","Huron Consulting","FTI Consulting","Alvarez and Marsal","Charles River Associates","Exponent","Guidehouse","Kroll","Analysis Group","Cornerstone Research","NERA Economic Consulting","Compass Lexecon","Brattle Group","Skadden Arps","Kirkland Ellis","Latham Watkins","Paul Weiss","Cravath Swaine","Sullivan Cromwell","Weil Gotshal","Gibson Dunn","Cleary Gottlieb","Brookfield Asset Management","Related Companies","Tishman Speyer","Vornado Realty","Hines","Silverstein Properties","RXR Realty","Blackstone","KKR","Apollo Global","Carlyle Group","Warburg Pincus","General Atlantic","Gates Foundation","Ford Foundation","Rockefeller Foundation","Bloomberg Philanthropies","Grant Thornton","BDO","RSM","Forvis Mazars","Marsh McLennan","Aon","Willis Towers Watson","NYU","Columbia University","University of Pennsylvania","Duke University","Emory University","Vanderbilt University","Mayo Clinic","Cleveland Clinic","Memorial Sloan Kettering","Mass General Brigham","Kaiser Permanente"];
+let dream=[...DREAM_DEFAULT],stability=[...STABILITY_DEFAULT],ghToken='',ghRepo='RichardHartPO/job-search-agent',agentSha='',connected=false;
+function renderList(type){const list=type==='dream'?dream:stability;const el=document.getElementById(type+'-list');const count=document.getElementById(type+'-count');count.textContent=list.length+' companies';el.innerHTML=list.map((c,i)=>`<div class="company-row"><span>${c}</span><button class="remove-btn" onclick="removeCompany('${type}',${i})">×</button></div>`).join('');}
+function addCompany(type){const input=document.getElementById(type+'-input');const val=input.value.trim();if(!val)return;if(type==='dream')dream.push(val);else stability.push(val);input.value='';renderList(type);markUnsaved();}
+function removeCompany(type,i){if(type==='dream')dream.splice(i,1);else stability.splice(i,1);renderList(type);markUnsaved();}
+function markUnsaved(){if(connected)document.getElementById('save-status').textContent='unsaved changes';}
+async function connectGitHub(){ghToken=document.getElementById('gh-token').value.trim();ghRepo=document.getElementById('gh-repo').value.trim();if(!ghToken){alert('Please enter your GitHub token');return;}const badge=document.getElementById('status-badge');badge.textContent='connecting...';badge.className='badge';try{const res=await fetch(`https://api.github.com/repos/${ghRepo}/contents/agent.js`,{headers:{Authorization:'token '+ghToken,Accept:'application/vnd.github.v3+json'}});if(!res.ok)throw new Error('Could not access repo');const data=await res.json();agentSha=data.sha;const content=atob(data.content.replace(/\n/g,''));parseCompanies(content);connected=true;badge.textContent='connected';badge.className='badge connected';document.getElementById('save-btn').disabled=false;document.getElementById('save-status').textContent='loaded from GitHub';}catch(e){badge.textContent='connection failed';badge.className='badge error';alert('Could not connect: '+e.message);}}
+function parseCompanies(content){const dm=content.match(/const DREAM_COMPANIES = \[([\s\S]*?)\];/);const sm=content.match(/const STABILITY_COMPANIES = \[([\s\S]*?)\];/);if(dm)dream=[...dm[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);if(sm)stability=[...sm[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);renderList('dream');renderList('stability');}
+function buildUpdatedContent(original){const ds=dream.map(c=>`  "${c}"`).join(',\n');const ss=stability.map(c=>`  "${c}"`).join(',\n');let u=original.replace(/const DREAM_COMPANIES = \[[\s\S]*?\];/,`const DREAM_COMPANIES = [\n${ds}\n];`);u=u.replace(/const STABILITY_COMPANIES = \[[\s\S]*?\];/,`const STABILITY_COMPANIES = [\n${ss}\n];`);return u;}
+async function saveToGitHub(){if(!connected){alert('Connect to GitHub first');return;}const saveBtn=document.getElementById('save-btn');const statusEl=document.getElementById('save-status');saveBtn.disabled=true;statusEl.textContent='saving...';try{const getRes=await fetch(`https://api.github.com/repos/${ghRepo}/contents/agent.js`,{headers:{Authorization:'token '+ghToken,Accept:'application/vnd.github.v3+json'}});const getData=await getRes.json();agentSha=getData.sha;const original=atob(getData.content.replace(/\n/g,''));const updated=buildUpdatedContent(original);const encoded=btoa(unescape(encodeURIComponent(updated)));const putRes=await fetch(`https://api.github.com/repos/${ghRepo}/contents/agent.js`,{method:'PUT',headers:{Authorization:'token '+ghToken,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},body:JSON.stringify({message:'Update company lists via Job Agent Editor',content:encoded,sha:agentSha})});if(!putRes.ok)throw new Error('Save failed');statusEl.textContent='saved to GitHub ✓';saveBtn.disabled=false;}catch(e){statusEl.textContent='save failed: '+e.message;saveBtn.disabled=false;}}
+renderList('dream');renderList('stability');
+</script>
+</body>
+</html>
+Paste that into the GitHub text area, then commit.
+
 
