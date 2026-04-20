@@ -36,7 +36,8 @@ const DREAM_COMPANIES = [
   "OMA",
   "Bloomberg Media",
   "Reuters",
-  "test company"
+  "test company",
+  "Conde Nast"
 ];
 
 const STABILITY_COMPANIES = [
