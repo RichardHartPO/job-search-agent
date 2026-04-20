@@ -36,7 +36,6 @@ const DREAM_COMPANIES = [
   "OMA",
   "Bloomberg Media",
   "Reuters",
-  "test company",
   "Conde Nast"
 ];
 
