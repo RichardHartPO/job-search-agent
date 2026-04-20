@@ -4,49 +4,104 @@ const fs = require("fs");
 
 const client = new Anthropic.Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ─── Your Target Companies ────────────────────────────────────────────────────
+// âââ Your Target Companies ââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 const DREAM_COMPANIES = [
-  "New York Magazine", "The Atlantic", "New Yorker", "Assouline", "Phaidon",
-  "Rizzoli", "Apartamento", "Monocle", "MIT Press", "Princeton Architectural Press",
-  "Berggruen Institute", "Getty", "MoMA", "Whitney Museum", "Guggenheim",
-  "Cooper Hewitt", "Smithsonian", "MacArthur Foundation", "Mellon Foundation",
-  "Aesop", "Ace Hotel", "Soho House", "Kinfolk", "Hem",
-  "Pentagram", "2x4", "OMA", "Bloomberg Media", "Reuters"
+  "New York Magazine",
+  "The Atlantic",
+  "New Yorker",
+  "Assouline",
+  "Phaidon",
+  "Rizzoli",
+  "Apartamento",
+  "Monocle",
+  "MIT Press",
+  "Princeton Architectural Press",
+  "Berggruen Institute",
+  "Getty",
+  "MoMA",
+  "Whitney Museum",
+  "Guggenheim",
+  "Cooper Hewitt",
+  "Smithsonian",
+  "MacArthur Foundation",
+  "Mellon Foundation",
+  "Aesop",
+  "Ace Hotel",
+  "Soho House",
+  "Kinfolk",
+  "Hem",
+  "Pentagram",
+  "2x4",
+  "OMA",
+  "Bloomberg Media",
+  "Reuters",
+  "test company"
 ];
 
 const STABILITY_COMPANIES = [
-  // Economic Consulting
-  "Berkeley Research Group", "Keystone Strategy", "Ankura", "Huron Consulting",
-  "FTI Consulting", "Alvarez and Marsal", "Charles River Associates", "Exponent",
-  "Guidehouse", "Kroll", "Analysis Group", "Cornerstone Research",
-  "NERA Economic Consulting", "Compass Lexecon", "Brattle Group",
-  // Big Law
-  "Skadden Arps", "Kirkland Ellis", "Latham Watkins", "Paul Weiss",
-  "Cravath Swaine", "Sullivan Cromwell", "Weil Gotshal", "Gibson Dunn",
+  "Berkeley Research Group",
+  "Keystone Strategy",
+  "Ankura",
+  "Huron Consulting",
+  "FTI Consulting",
+  "Alvarez and Marsal",
+  "Charles River Associates",
+  "Exponent",
+  "Guidehouse",
+  "Kroll",
+  "Analysis Group",
+  "Cornerstone Research",
+  "NERA Economic Consulting",
+  "Compass Lexecon",
+  "Brattle Group",
+  "Skadden Arps",
+  "Kirkland Ellis",
+  "Latham Watkins",
+  "Paul Weiss",
+  "Cravath Swaine",
+  "Sullivan Cromwell",
+  "Weil Gotshal",
+  "Gibson Dunn",
   "Cleary Gottlieb",
-  // Real Estate
-  "Brookfield Asset Management", "Related Companies", "Tishman Speyer",
-  "Vornado Realty", "Hines", "Silverstein Properties", "RXR Realty",
-  // Finance / PE
-  "Blackstone", "KKR", "Apollo Global", "Carlyle Group",
-  "Warburg Pincus", "General Atlantic",
-  // Foundations & Philanthropy
-  "Gates Foundation", "Ford Foundation", "Rockefeller Foundation",
+  "Brookfield Asset Management",
+  "Related Companies",
+  "Tishman Speyer",
+  "Vornado Realty",
+  "Hines",
+  "Silverstein Properties",
+  "RXR Realty",
+  "Blackstone",
+  "KKR",
+  "Apollo Global",
+  "Carlyle Group",
+  "Warburg Pincus",
+  "General Atlantic",
+  "Gates Foundation",
+  "Ford Foundation",
+  "Rockefeller Foundation",
   "Bloomberg Philanthropies",
-  // Professional Services
-  "Grant Thornton", "BDO", "RSM", "Forvis Mazars",
-  // Insurance
-  "Marsh McLennan", "Aon", "Willis Towers Watson",
-  // Higher Ed
-  "NYU", "Columbia University", "University of Pennsylvania",
-  "Duke University", "Emory University", "Vanderbilt University",
-  // Healthcare
-  "Mayo Clinic", "Cleveland Clinic", "Memorial Sloan Kettering",
-  "Mass General Brigham", "Kaiser Permanente"
+  "Grant Thornton",
+  "BDO",
+  "RSM",
+  "Forvis Mazars",
+  "Marsh McLennan",
+  "Aon",
+  "Willis Towers Watson",
+  "NYU",
+  "Columbia University",
+  "University of Pennsylvania",
+  "Duke University",
+  "Emory University",
+  "Vanderbilt University",
+  "Mayo Clinic",
+  "Cleveland Clinic",
+  "Memorial Sloan Kettering",
+  "Mass General Brigham",
+  "Kaiser Permanente"
 ];
 
-// ─── Search Prompts ───────────────────────────────────────────────────────────
+// âââ Search Prompts âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 const DREAM_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
 
@@ -97,7 +152,7 @@ For each matching role found, return:
 Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
 Format as JSON array.`;
 
-// ─── Run Agent Search ─────────────────────────────────────────────────────────
+// âââ Run Agent Search âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 async function runSearch(prompt, label) {
   console.log(`Running ${label} search...`);
@@ -126,7 +181,7 @@ async function runSearch(prompt, label) {
   }
 }
 
-// ─── Deduplication ────────────────────────────────────────────────────────────
+// âââ Deduplication ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 const SEEN_FILE = "seen_jobs.json";
 
@@ -148,7 +203,7 @@ function filterNew(jobs, seen) {
   });
 }
 
-// ─── Email ────────────────────────────────────────────────────────────────────
+// âââ Email ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 async function sendEmail(dreamJobs, stabilityJobs) {
   const transporter = nodemailer.createTransport({
@@ -168,10 +223,10 @@ async function sendEmail(dreamJobs, stabilityJobs) {
           <div style="font-size:18px;font-weight:700;color:#1a1a2e">${job.title}</div>
           <div style="font-size:15px;color:#2d5a8e;margin:4px 0">${job.company}</div>
           <div style="font-size:13px;color:#666;margin-bottom:10px">
-            ${job.location} ${job.salary ? `· ${job.salary}` : ""} · Posted: ${job.posted || "recently"}
+            ${job.location} ${job.salary ? `Â· ${job.salary}` : ""} Â· Posted: ${job.posted || "recently"}
           </div>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:12px">${job.summary || ""}</div>
-          <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role →</a>
+          <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role â</a>
         </div>
       `).join("")}
     `;
@@ -189,10 +244,10 @@ async function sendEmail(dreamJobs, stabilityJobs) {
       <h1 style="font-size:26px;margin-bottom:4px">Job Agent Alert</h1>
       <p style="color:#666;margin-top:0">${totalNew} new role${totalNew > 1 ? "s" : ""} found matching your criteria</p>
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-      ${formatJobs(dreamJobs, "🎯 Dream Roles")}
-      ${formatJobs(stabilityJobs, "🧭 Stability Roles")}
+      ${formatJobs(dreamJobs, "ð¯ Dream Roles")}
+      ${formatJobs(stabilityJobs, "ð§­ Stability Roles")}
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
-      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent · Running hourly via GitHub Actions</p>
+      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent Â· Running hourly via GitHub Actions</p>
     </div>
   `;
 
@@ -206,7 +261,7 @@ async function sendEmail(dreamJobs, stabilityJobs) {
   console.log(`Email sent with ${totalNew} new roles.`);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// âââ Main âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 async function main() {
   const seen = loadSeen();
