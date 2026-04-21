@@ -90,17 +90,11 @@ The candidate profile:
 - Prioritize: organizations where craft, aesthetics, and visual intelligence are core values — places that would value a designer with deep editorial sensibility and cultural credibility
 - Avoid: advertising agencies, marketing-led roles, e-commerce, UX/UI, product design, junior roles, anything where design is not central to the organization's identity
 
-For each matching role found, return:
-- Company name
-- Job title
-- Location
-- Salary (if listed)
-- Date posted
-- A 3-sentence summary of why this is a strong match
-- Direct URL to the job listing
+For each matching role found, return a JSON object with exactly these field names:
+{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
 
 Only return roles posted in the last 5 days. If nothing new, say "NO_NEW_ROLES".
-Format as JSON array.`;
+Return a JSON array of these objects and nothing else.`;
 
 const STABILITY_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
 
@@ -116,17 +110,11 @@ The candidate profile:
 - Prioritize: stable organizations that lack a strong in-house creative function and would value someone who could build one — places with strong values, mission-driven culture, or intellectual seriousness where a senior creative could have real impact
 - Avoid: advertising agencies, marketing strategy roles, e-commerce, UX/UI, product design, early-stage startups, anything requiring deep marketing expertise
 
-For each matching role found, return:
-- Company name
-- Job title
-- Location / remote status
-- Salary (if listed)
-- Date posted
-- A 3-sentence summary of why this is a strong match
-- Direct URL to the job listing
+For each matching role found, return a JSON object with exactly these field names:
+{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
 
 Only return roles posted in the last 5 days. If nothing new, say "NO_NEW_ROLES".
-Format as JSON array.`;
+Return a JSON array of these objects and nothing else.`;
 
 // âââ Run Agent Search âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
@@ -199,10 +187,10 @@ async function sendEmail(dreamJobs, stabilityJobs) {
           <div style="font-size:18px;font-weight:700;color:#1a1a2e">${job.title}</div>
           <div style="font-size:15px;color:#2d5a8e;margin:4px 0">${job.company}</div>
           <div style="font-size:13px;color:#666;margin-bottom:10px">
-            ${job.location} ${job.salary ? `Â· ${job.salary}` : ""} Â· Posted: ${job.posted || "recently"}
+            ${job.location} ${job.salary ? `&middot; ${job.salary}` : ""} &middot; Posted: ${job.posted || "recently"}
           </div>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:12px">${job.summary || ""}</div>
-          <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role â</a>
+          <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role &rarr;</a>
         </div>
       `).join("")}
     `;
@@ -220,14 +208,14 @@ async function sendEmail(dreamJobs, stabilityJobs) {
       <h1 style="font-size:26px;margin-bottom:4px">Job Agent Alert</h1>
       <p style="color:#666;margin-top:0">${totalNew} new role${totalNew > 1 ? "s" : ""} found matching your criteria</p>
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-      ${formatJobs(dreamJobs, "ð¯ Dream Roles")}
-      ${formatJobs(stabilityJobs, "ð§­ Stability Roles")}
+      ${formatJobs(dreamJobs, "Dream Roles")}
+      ${formatJobs(stabilityJobs, "Stability Roles")}
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
-      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent Â· Running hourly via GitHub Actions</p>
+      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent &middot; Running hourly via GitHub Actions</p>
     </div>
   `;
 
-  await transporter.sendMail({
+    await transporter.sendMail({
     from: process.env.GMAIL_USER,
     to: process.env.NOTIFY_EMAIL,
     subject: `Job Agent: ${totalNew} new role${totalNew > 1 ? "s" : ""} found`,
