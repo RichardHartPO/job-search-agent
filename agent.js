@@ -70,14 +70,17 @@ const DREAM_PROMPT = `You are a job search agent working on behalf of a senior c
 
 Search the web RIGHT NOW for newly posted job listings (posted within the last 24-48 hours only) at these specific companies: ${DREAM_COMPANIES.join(", ")}.
 
-Look for these roles: Creative Director, Design Director, VP of Creative, Executive Creative Director, Head of Creative, Chief Creative Officer.
+Look for these roles: Creative Director, Design Director, VP Creative, Executive Creative Director, Head of Creative, Art Director (senior), Head of Design.
+
+Industries of focus: editorial publishing, cultural institutions, museums, galleries, artist studios, design-led brands, architecture firms, cultural organizations.
 
 The candidate profile:
 - 30+ years experience, doing the best work of their career
-- Deep expertise in brand identity, editorial, campaigns, cultural institutions
-- Based in NYC, open to hybrid or relocation for exceptional roles
-- Salary expectation: $230,000-$300,000+
-- Avoid: product design, UX/UI, junior roles, generic marketing
+- Deep editorial sensibility, cultural credibility, expertise in craft and visual intelligence
+- New York preferred, open to remote or relocation for exceptional roles
+- Salary: $230,000 minimum, $300,000 target
+- Prioritize: organizations where craft, aesthetics, and visual intelligence are core values — places that would value a designer with deep editorial sensibility and cultural credibility
+- Avoid: advertising agencies, marketing-led roles, e-commerce, UX/UI, product design, junior roles, anything where design is not central to the organization's identity
 
 For each matching role found, return:
 - Company name
@@ -95,17 +98,19 @@ const STABILITY_PROMPT = `You are a job search agent working on behalf of a seni
 
 Search the web RIGHT NOW for newly posted job listings (posted within the last 24-48 hours only) at these specific companies: ${STABILITY_COMPANIES.join(", ")}.
 
-Also search broadly for: Creative Director OR Design Director OR "Creative Services Director" at law firms, economic consulting firms, private equity firms, foundations, and major universities. Remote positions strongly preferred.
+Also search broadly for: Creative Director OR Design Director OR "Creative Services Director" OR "Head of Creative" OR "Director of Brand" at economic consulting firms, management consulting firms, law firms, real estate firms, accounting firms, foundations, think tanks, civic organizations, journalism nonprofits, professional publishers, museums, luxury hospitality, healthcare nonprofits, internet freedom organizations, international NGOs, and legal technology companies. Remote positions strongly preferred.
 
 The candidate profile:
-- 30+ years experience in brand, editorial, campaigns, creative operations
-- Looking for stable remote-friendly in-house creative leadership
-- Salary expectation: $150,000+
-- Avoid: product design, UX/UI, early-stage startups, generic marketing strategy
+- 30+ years experience in brand, editorial, visual communications, creative operations
+- Looking for stable, remote-friendly in-house creative leadership with real autonomy
+- Location: remote strongly preferred, anywhere in the United States
+- Salary: $150,000 minimum
+- Prioritize: stable organizations that lack a strong in-house creative function and would value someone who could build one — places with strong values, mission-driven culture, or intellectual seriousness where a senior creative could have real impact
+- Avoid: advertising agencies, marketing strategy roles, e-commerce, UX/UI, product design, early-stage startups, anything requiring deep marketing expertise
 
 For each matching role found, return:
 - Company name
-- Job title  
+- Job title
 - Location / remote status
 - Salary (if listed)
 - Date posted
