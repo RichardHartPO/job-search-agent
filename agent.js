@@ -76,7 +76,7 @@ const STABILITY_COMPANIES = [
 
 const DREAM_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
 
-Search the web RIGHT NOW for newly posted job listings (posted within the last 5 days only) at these specific companies: ${DREAM_COMPANIES.join(", ")}.
+Search the web RIGHT NOW for newly posted job listings (posted within the last 48 hours only) at these specific companies: ${DREAM_COMPANIES.join(", ")}.
 
 Look for these roles: Creative Director, Design Director, VP Creative, Executive Creative Director, Head of Creative, Art Director (senior), Head of Design.
 
@@ -93,12 +93,12 @@ The candidate profile:
 For each matching role found, return a JSON object with exactly these field names:
 { "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
 
-Only return roles posted in the last 5 days. If nothing new, say "NO_NEW_ROLES".
+Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
 Return a JSON array of these objects and nothing else.`;
 
 const STABILITY_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
 
-Search the web RIGHT NOW for newly posted job listings (posted within the last 5 days only) at these specific companies: ${STABILITY_COMPANIES.join(", ")}.
+Search the web RIGHT NOW for newly posted job listings (posted within the last 48 hours only) at these specific companies: ${STABILITY_COMPANIES.join(", ")}.
 
 Also search broadly for: Creative Director OR Design Director OR "Creative Services Director" OR "Head of Creative" OR "Director of Brand" at economic consulting firms, management consulting firms, law firms, real estate firms, accounting firms, foundations, think tanks, civic organizations, journalism nonprofits, professional publishers, museums, luxury hospitality, healthcare nonprofits, internet freedom organizations, international NGOs, and legal technology companies. Remote positions strongly preferred.
 
@@ -113,7 +113,7 @@ The candidate profile:
 For each matching role found, return a JSON object with exactly these field names:
 { "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
 
-Only return roles posted in the last 5 days. If nothing new, say "NO_NEW_ROLES".
+Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
 Return a JSON array of these objects and nothing else.`;
 
 // âââ Run Agent Search âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
