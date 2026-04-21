@@ -61,7 +61,15 @@ const STABILITY_COMPANIES = [
   "Partners in Health", "Doctors Without Borders USA",
   "Mozilla Foundation", "Wikimedia Foundation", "Electronic Frontier Foundation",
   "Human Rights Watch", "Amnesty International", "Oxfam America",
-  "Relativity", "Logikcull", "Everlaw"
+  "Relativity", "Logikcull", "Everlaw",
+  "Harvard University", "Yale University", "Columbia University", "Princeton University",
+  "Dartmouth College", "Brown University", "Cornell University", "MIT", "Stanford University",
+  "University of Chicago", "Northwestern University", "Johns Hopkins University",
+  "Georgetown University", "NYU", "Tufts University", "Boston University",
+  "Northeastern University", "RISD", "Parsons School of Design", "Pratt Institute",
+  "CalArts", "MICA", "Cranbrook Academy of Art", "UCLA", "USC",
+  "University of Michigan", "University of Virginia", "The New School",
+  "Cooper Union", "School of Visual Arts", "Fordham University"
 ];
 
 // âââ Search Prompts âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
