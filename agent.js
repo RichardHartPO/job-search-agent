@@ -91,7 +91,9 @@ The candidate profile:
 - Avoid: advertising agencies, marketing-led roles, e-commerce, UX/UI, product design, junior roles, anything where design is not central to the organization's identity
 
 For each matching role found, return a JSON object with exactly these field names:
-{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
+{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "YYYY-MM-DD", "summary": "...", "url": "..." }
+
+The "posted" field must be the actual verified posting date in YYYY-MM-DD format, taken directly from the job listing. Do not estimate or guess the date. If you cannot confirm the exact posting date from the listing, omit that role entirely.
 
 Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
 Return a JSON array of these objects and nothing else.`;
@@ -111,7 +113,9 @@ The candidate profile:
 - Avoid: advertising agencies, marketing strategy roles, e-commerce, UX/UI, product design, early-stage startups, anything requiring deep marketing expertise
 
 For each matching role found, return a JSON object with exactly these field names:
-{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "...", "summary": "...", "url": "..." }
+{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "YYYY-MM-DD", "summary": "...", "url": "..." }
+
+The "posted" field must be the actual verified posting date in YYYY-MM-DD format, taken directly from the job listing. Do not estimate or guess the date. If you cannot confirm the exact posting date from the listing, omit that role entirely.
 
 Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
 Return a JSON array of these objects and nothing else.`;
@@ -167,6 +171,25 @@ function filterNew(jobs, seen) {
   });
 }
 
+function filterByDate(jobs, label) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 5);
+  cutoff.setHours(0, 0, 0, 0);
+
+  return jobs.filter(job => {
+    if (!job.posted || !/^\d{4}-\d{2}-\d{2}$/.test(job.posted)) {
+      console.log(`${label}: Rejected "${job.title}" at ${job.company} — unverified posting date`);
+      return false;
+    }
+    const posted = new Date(job.posted + "T00:00:00");
+    if (posted < cutoff) {
+      console.log(`${label}: Rejected "${job.title}" at ${job.company} — posted ${job.posted}, too old`);
+      return false;
+    }
+    return true;
+  });
+}
+
 // âââ Email ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 async function sendEmail(dreamJobs, stabilityJobs) {
@@ -187,7 +210,10 @@ async function sendEmail(dreamJobs, stabilityJobs) {
           <div style="font-size:18px;font-weight:700;color:#1a1a2e">${job.title}</div>
           <div style="font-size:15px;color:#2d5a8e;margin:4px 0">${job.company}</div>
           <div style="font-size:13px;color:#666;margin-bottom:10px">
-            ${job.location} ${job.salary ? `&middot; ${job.salary}` : ""} &middot; Posted: ${job.posted || "recently"}
+            ${job.location} ${job.salary ? `&middot; ${job.salary}` : ""}
+          </div>
+          <div style="font-size:12px;color:#2d5a8e;font-weight:600;margin-bottom:10px;padding:4px 8px;background:#e8f0f8;border-radius:4px;display:inline-block">
+            Verified posted: ${job.posted}
           </div>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:12px">${job.summary || ""}</div>
           <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role &rarr;</a>
@@ -235,8 +261,8 @@ async function main() {
     runSearch(STABILITY_PROMPT, "Stability Roles")
   ]);
 
-  const newDream = filterNew(dreamResults, seen);
-  const newStability = filterNew(stabilityResults, seen);
+  const newDream = filterByDate(filterNew(dreamResults, seen), "Dream Roles");
+  const newStability = filterByDate(filterNew(stabilityResults, seen), "Stability Roles");
 
   saveSeen(seen);
 
