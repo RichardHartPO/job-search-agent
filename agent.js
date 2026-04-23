@@ -1,10 +1,10 @@
-const Anthropic = require("@anthropic-ai/sdk"); 
+const Anthropic = require("@anthropic-ai/sdk");
 const nodemailer = require("nodemailer");
 const fs = require("fs");
 
 const client = new Anthropic.Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// âââ Your Target Companies ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Target Companies ---
 
 const DREAM_COMPANIES = [
   "New York Magazine", "The New Yorker", "Frieze", "Apartamento", "Cereal",
@@ -72,11 +72,39 @@ const STABILITY_COMPANIES = [
   "Cooper Union", "School of Visual Arts", "Fordham University"
 ];
 
-// âââ Search Prompts âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Shared prompt sections ---
 
-const DREAM_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
+const SOURCE_RULES = `
+SOURCE PRIORITY:
+- STRONGLY PREFER results from the company's own careers page (e.g. moma.org/careers, newyorker.com/careers)
+- STRONGLY PREFER ATS platforms where companies post directly: Greenhouse (boards.greenhouse.io), Lever (jobs.lever.co), Workday (myworkdayjobs.com), Ashby (jobs.ashbyhq.com), SmartRecruiters, BambooHR
+- Use search queries like: "site:greenhouse.io [company] creative director" or "[company] careers creative director" or "[company] jobs creative director"
 
-Search the web RIGHT NOW for newly posted job listings (posted within the last 48 hours only) at these specific companies: ${DREAM_COMPANIES.join(", ")}.
+AGGREGATOR EXCLUSION — do NOT return results from these domains. If a role only appears on one of these sites, skip it:
+linkedin.com, indeed.com, glassdoor.com, ziprecruiter.com, simplyhired.com, monster.com, careerbuilder.com, builtin.com, themuse.com, wellfound.com, theladders.com, flexjobs.com`;
+
+const DATE_RULES = `
+DATE HANDLING:
+- Extract whatever date information is available: absolute dates, relative dates like "2 weeks ago", or "recently posted"
+- Convert relative dates to YYYY-MM-DD using today's date as reference
+- If no date information is available at all, set "posted" to "unknown" and still include the role
+- Prioritize thoroughness over precision: better to include a role with an uncertain date than to miss a real one
+- Include roles posted within the last 14 days`;
+
+const JSON_FORMAT = `
+Return a JSON array. Each object must use exactly these field names:
+{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "YYYY-MM-DD or unknown", "summary": "...", "url": "..." }
+
+The "summary" field should be 2-3 sentences explaining why this is a strong match for the candidate.
+If no matching roles are found, respond with exactly: NO_NEW_ROLES
+Return only the JSON array or NO_NEW_ROLES — nothing else.`;
+
+// --- Prompt builders ---
+
+function buildDreamBatchPrompt(companies) {
+  return `You are a job search agent working on behalf of a senior creative professional.
+
+Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.
 
 Look for these roles: Creative Director, Design Director, VP Creative, Executive Creative Director, Head of Creative, Art Director (senior), Head of Design.
 
@@ -87,46 +115,108 @@ The candidate profile:
 - Deep editorial sensibility, cultural credibility, expertise in craft and visual intelligence
 - New York preferred, open to remote or relocation for exceptional roles
 - Salary: $230,000 minimum, $300,000 target
-- Prioritize: organizations where craft, aesthetics, and visual intelligence are core values — places that would value a designer with deep editorial sensibility and cultural credibility
+- Prioritize: organizations where craft, aesthetics, and visual intelligence are core values
 - Avoid: advertising agencies, marketing-led roles, e-commerce, UX/UI, product design, junior roles, anything where design is not central to the organization's identity
+${SOURCE_RULES}
+${DATE_RULES}
+${JSON_FORMAT}`;
+}
 
-For each matching role found, return a JSON object with exactly these field names:
-{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "YYYY-MM-DD", "summary": "...", "url": "..." }
+function buildStabilityBatchPrompt(companies) {
+  return `You are a job search agent working on behalf of a senior creative professional.
 
-The "posted" field must be the actual verified posting date in YYYY-MM-DD format, taken directly from the job listing. Do not estimate or guess the date. If you cannot confirm the exact posting date from the listing, omit that role entirely.
+Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.
 
-Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
-Return a JSON array of these objects and nothing else.`;
-
-const STABILITY_PROMPT = `You are a job search agent working on behalf of a senior creative professional.
-
-Search the web RIGHT NOW for newly posted job listings (posted within the last 48 hours only) at these specific companies: ${STABILITY_COMPANIES.join(", ")}.
-
-Also search broadly for: Creative Director OR Design Director OR "Creative Services Director" OR "Head of Creative" OR "Director of Brand" at economic consulting firms, management consulting firms, law firms, real estate firms, accounting firms, foundations, think tanks, civic organizations, journalism nonprofits, professional publishers, museums, luxury hospitality, healthcare nonprofits, internet freedom organizations, international NGOs, and legal technology companies. Remote positions strongly preferred.
+Look for these roles: Creative Director, Design Director, Creative Services Director, Head of Creative, Director of Brand.
 
 The candidate profile:
 - 30+ years experience in brand, editorial, visual communications, creative operations
 - Looking for stable, remote-friendly in-house creative leadership with real autonomy
 - Location: remote strongly preferred, anywhere in the United States
 - Salary: $150,000 minimum
-- Prioritize: stable organizations that lack a strong in-house creative function and would value someone who could build one — places with strong values, mission-driven culture, or intellectual seriousness where a senior creative could have real impact
+- Prioritize: stable organizations that lack a strong in-house creative function and would value someone who could build one — places with strong values, mission-driven culture, or intellectual seriousness
 - Avoid: advertising agencies, marketing strategy roles, e-commerce, UX/UI, product design, early-stage startups, anything requiring deep marketing expertise
+${SOURCE_RULES}
+${DATE_RULES}
+${JSON_FORMAT}`;
+}
 
-For each matching role found, return a JSON object with exactly these field names:
-{ "company": "...", "title": "...", "location": "...", "salary": "...", "posted": "YYYY-MM-DD", "summary": "...", "url": "..." }
+function buildDreamSweepPrompt() {
+  return `You are a job search agent working on behalf of a senior creative professional.
 
-The "posted" field must be the actual verified posting date in YYYY-MM-DD format, taken directly from the job listing. Do not estimate or guess the date. If you cannot confirm the exact posting date from the listing, omit that role entirely.
+Search the web RIGHT NOW for Creative Director, Design Director, VP Creative, Executive Creative Director, Head of Creative, Art Director (senior), or Head of Design roles posted in the last 14 days. Do NOT search for specific named companies — this is a broad category sweep to find roles that specific-company searches may have missed.
 
-Only return roles posted in the last 48 hours. If nothing new, say "NO_NEW_ROLES".
-Return a JSON array of these objects and nothing else.`;
+Search across organizations in these industries:
+- Editorial and cultural publishing (magazines, art books, literary journals)
+- Art museums, natural history museums, science museums, design museums
+- Galleries (commercial and nonprofit)
+- Artist studios and cultural foundations
+- Design-led consumer brands and hospitality companies
+- Architecture and design firms
+- Cultural organizations, film festivals, literary organizations, civic cultural institutions
 
-// âââ Run Agent Search âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+The candidate profile:
+- 30+ years experience, doing the best work of their career
+- Deep editorial sensibility, cultural credibility, expertise in craft and visual intelligence
+- New York preferred, open to remote or relocation for exceptional roles
+- Salary: $230,000 minimum, $300,000 target
+- Prioritize: organizations where craft, aesthetics, and visual intelligence are core values
+- Avoid: advertising agencies, marketing-led roles, e-commerce, UX/UI, product design, junior roles
+${SOURCE_RULES}
+${DATE_RULES}
+${JSON_FORMAT}`;
+}
+
+function buildStabilitySweepPrompt() {
+  return `You are a job search agent working on behalf of a senior creative professional.
+
+Search the web RIGHT NOW for Creative Director, Design Director, Creative Services Director, Head of Creative, or Director of Brand roles posted in the last 14 days. Do NOT search for specific named companies — this is a broad category sweep to find roles that specific-company searches may have missed.
+
+Search across organizations in these industries:
+- Economic consulting and management consulting firms
+- Big Law firms
+- Real estate development and investment companies
+- Accounting and professional services firms
+- Foundations and philanthropies
+- Think tanks and civic organizations
+- Journalism nonprofits and public media organizations
+- Professional and academic publishers
+- Luxury hospitality companies
+- Healthcare nonprofits and advocacy organizations
+- Internet freedom, digital rights, and international NGOs
+- Legal technology companies
+
+Remote positions strongly preferred.
+
+The candidate profile:
+- 30+ years experience in brand, editorial, visual communications, creative operations
+- Looking for stable, remote-friendly in-house creative leadership with real autonomy
+- Location: remote strongly preferred, anywhere in the United States
+- Salary: $150,000 minimum
+- Prioritize: stable organizations that lack a strong in-house creative function and would value someone who could build one
+- Avoid: advertising agencies, marketing strategy roles, e-commerce, UX/UI, product design, early-stage startups
+${SOURCE_RULES}
+${DATE_RULES}
+${JSON_FORMAT}`;
+}
+
+// --- Utility ---
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// --- Search ---
 
 async function runSearch(prompt, label) {
-  console.log(`Running ${label} search...`);
+  console.log(`\n[SEARCH] ${label}`);
   try {
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-5",
       max_tokens: 4000,
       tools: [{ type: "web_search_20250305", name: "web_search" }],
       messages: [{ role: "user", content: prompt }]
@@ -136,20 +226,66 @@ async function runSearch(prompt, label) {
     const fullText = textBlocks.join("\n");
 
     if (fullText.includes("NO_NEW_ROLES")) {
-      console.log(`${label}: No new roles found.`);
+      console.log(`[RESULT] ${label}: no roles found`);
       return [];
     }
 
     const jsonMatch = fullText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
-    return JSON.parse(jsonMatch[0]);
+    if (!jsonMatch) {
+      console.log(`[RESULT] ${label}: no JSON in response`);
+      return [];
+    }
+
+    const jobs = JSON.parse(jsonMatch[0]);
+    console.log(`[RESULT] ${label}: ${jobs.length} raw result(s)`);
+    return jobs;
   } catch (err) {
-    console.error(`${label} search failed:`, err.message);
+    console.error(`[ERROR] ${label} failed:`, err.message);
     return [];
   }
 }
 
-// âââ Deduplication ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Filters ---
+
+const AGGREGATOR_DOMAINS = [
+  "linkedin.com", "indeed.com", "glassdoor.com", "ziprecruiter.com",
+  "simplyhired.com", "monster.com", "careerbuilder.com", "builtin.com",
+  "themuse.com", "wellfound.com", "theladders.com", "flexjobs.com"
+];
+
+function filterAggregators(jobs, label) {
+  return jobs.filter(job => {
+    if (!job.url) return true;
+    const domain = AGGREGATOR_DOMAINS.find(d => job.url.includes(d));
+    if (domain) {
+      console.log(`[REJECT] ${label}: "${job.title}" at ${job.company} — aggregator URL (${domain})`);
+      return false;
+    }
+    return true;
+  });
+}
+
+function filterByDate(jobs, label) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  cutoff.setHours(0, 0, 0, 0);
+
+  return jobs.filter(job => {
+    if (!job.posted || job.posted === "unknown" || !/^\d{4}-\d{2}-\d{2}$/.test(job.posted)) {
+      console.log(`[INCLUDE] ${label}: "${job.title}" at ${job.company} — date unverified, flagging`);
+      job.dateUnverified = true;
+      return true;
+    }
+    const posted = new Date(job.posted + "T00:00:00");
+    if (posted < cutoff) {
+      console.log(`[REJECT] ${label}: "${job.title}" at ${job.company} — posted ${job.posted}, older than 14 days`);
+      return false;
+    }
+    return true;
+  });
+}
+
+// --- Deduplication ---
 
 const SEEN_FILE = "seen_jobs.json";
 
@@ -162,35 +298,19 @@ function saveSeen(seen) {
   fs.writeFileSync(SEEN_FILE, JSON.stringify(seen, null, 2));
 }
 
-function filterNew(jobs, seen) {
+function filterNew(jobs, seen, label) {
   return jobs.filter(job => {
     const id = `${job.company}-${job.title}`.toLowerCase().replace(/\s+/g, "-");
-    if (seen.includes(id)) return false;
+    if (seen.includes(id)) {
+      console.log(`[DEDUP] ${label}: skipping "${job.title}" at ${job.company} — already seen`);
+      return false;
+    }
     seen.push(id);
     return true;
   });
 }
 
-function filterByDate(jobs, label) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 5);
-  cutoff.setHours(0, 0, 0, 0);
-
-  return jobs.filter(job => {
-    if (!job.posted || !/^\d{4}-\d{2}-\d{2}$/.test(job.posted)) {
-      console.log(`${label}: Rejected "${job.title}" at ${job.company} — unverified posting date`);
-      return false;
-    }
-    const posted = new Date(job.posted + "T00:00:00");
-    if (posted < cutoff) {
-      console.log(`${label}: Rejected "${job.title}" at ${job.company} — posted ${job.posted}, too old`);
-      return false;
-    }
-    return true;
-  });
-}
-
-// âââ Email ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Email ---
 
 async function sendEmail(dreamJobs, stabilityJobs) {
   const transporter = nodemailer.createTransport({
@@ -210,10 +330,10 @@ async function sendEmail(dreamJobs, stabilityJobs) {
           <div style="font-size:18px;font-weight:700;color:#1a1a2e">${job.title}</div>
           <div style="font-size:15px;color:#2d5a8e;margin:4px 0">${job.company}</div>
           <div style="font-size:13px;color:#666;margin-bottom:10px">
-            ${job.location} ${job.salary ? `&middot; ${job.salary}` : ""}
+            ${job.location}${job.salary ? ` &middot; ${job.salary}` : ""}
           </div>
-          <div style="font-size:12px;color:#2d5a8e;font-weight:600;margin-bottom:10px;padding:4px 8px;background:#e8f0f8;border-radius:4px;display:inline-block">
-            Verified posted: ${job.posted}
+          <div style="font-size:12px;font-weight:600;margin-bottom:10px;padding:4px 8px;border-radius:4px;display:inline-block;${job.dateUnverified ? "color:#8a6000;background:#fff8e1" : "color:#2d5a8e;background:#e8f0f8"}">
+            ${job.dateUnverified ? "Date unverified" : `Posted: ${job.posted}`}
           </div>
           <div style="font-size:14px;color:#333;line-height:1.6;margin-bottom:12px">${job.summary || ""}</div>
           <a href="${job.url}" style="background:#2d5a8e;color:white;padding:8px 18px;border-radius:5px;text-decoration:none;font-size:13px;font-weight:600">View Role &rarr;</a>
@@ -237,39 +357,82 @@ async function sendEmail(dreamJobs, stabilityJobs) {
       ${formatJobs(dreamJobs, "Dream Roles")}
       ${formatJobs(stabilityJobs, "Stability Roles")}
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
-      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent &middot; Running hourly via GitHub Actions</p>
+      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent &middot; Running twice daily via GitHub Actions</p>
     </div>
   `;
 
-    await transporter.sendMail({
+  await transporter.sendMail({
     from: process.env.GMAIL_USER,
     to: process.env.NOTIFY_EMAIL,
     subject: `Job Agent: ${totalNew} new role${totalNew > 1 ? "s" : ""} found`,
     html
   });
 
-  console.log(`Email sent with ${totalNew} new roles.`);
+  console.log(`\n[EMAIL] Sent with ${totalNew} new roles.`);
 }
 
-// âââ Main âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Main ---
 
 async function main() {
+  console.log("\n=== Job Search Agent Starting ===");
   const seen = loadSeen();
 
-  const [dreamResults, stabilityResults] = await Promise.all([
-    runSearch(DREAM_PROMPT, "Dream Roles"),
-    runSearch(STABILITY_PROMPT, "Stability Roles")
-  ]);
+  const dreamBatches = chunkArray(DREAM_COMPANIES, 15);
+  const stabilityBatches = chunkArray(STABILITY_COMPANIES, 15);
 
-  const newDream = filterByDate(filterNew(dreamResults, seen), "Dream Roles");
-  const newStability = filterByDate(filterNew(stabilityResults, seen), "Stability Roles");
+  console.log(`\n[PLAN] Dream: ${dreamBatches.length} batches + 1 sweep`);
+  console.log(`[PLAN] Stability: ${stabilityBatches.length} batches + 1 sweep`);
+  dreamBatches.forEach((b, i) =>
+    console.log(`  Dream Batch ${i + 1}: ${b.join(", ")}`)
+  );
+  stabilityBatches.forEach((b, i) =>
+    console.log(`  Stability Batch ${i + 1}: ${b.join(", ")}`)
+  );
+
+  // Run all searches in parallel
+  const allSearchPromises = [
+    runSearch(buildDreamSweepPrompt(), "Dream Sweep (broad category)"),
+    runSearch(buildStabilitySweepPrompt(), "Stability Sweep (broad category)"),
+    ...dreamBatches.map((batch, i) =>
+      runSearch(buildDreamBatchPrompt(batch), `Dream Batch ${i + 1}/${dreamBatches.length} [${batch[0]} ... ${batch[batch.length - 1]}]`)
+    ),
+    ...stabilityBatches.map((batch, i) =>
+      runSearch(buildStabilityBatchPrompt(batch), `Stability Batch ${i + 1}/${stabilityBatches.length} [${batch[0]} ... ${batch[batch.length - 1]}]`)
+    )
+  ];
+
+  const allResults = await Promise.all(allSearchPromises);
+
+  const dreamSweepResults = allResults[0];
+  const stabilitySweepResults = allResults[1];
+  const dreamBatchResults = allResults.slice(2, 2 + dreamBatches.length).flat();
+  const stabilityBatchResults = allResults.slice(2 + dreamBatches.length).flat();
+
+  const allDreamRaw = [...dreamBatchResults, ...dreamSweepResults];
+  const allStabilityRaw = [...stabilityBatchResults, ...stabilitySweepResults];
+
+  console.log(`\n[SUMMARY] Raw — Dream: ${allDreamRaw.length}, Stability: ${allStabilityRaw.length}`);
+
+  const dreamAfterAgg = filterAggregators(allDreamRaw, "Dream");
+  const stabilityAfterAgg = filterAggregators(allStabilityRaw, "Stability");
+  console.log(`[SUMMARY] After aggregator filter — Dream: ${dreamAfterAgg.length}, Stability: ${stabilityAfterAgg.length}`);
+
+  const dreamAfterDate = filterByDate(dreamAfterAgg, "Dream");
+  const stabilityAfterDate = filterByDate(stabilityAfterAgg, "Stability");
+  console.log(`[SUMMARY] After date filter — Dream: ${dreamAfterDate.length}, Stability: ${stabilityAfterDate.length}`);
+
+  const newDream = filterNew(dreamAfterDate, seen, "Dream");
+  const newStability = filterNew(stabilityAfterDate, seen, "Stability");
+  console.log(`[SUMMARY] After dedup — Dream: ${newDream.length}, Stability: ${newStability.length}`);
 
   saveSeen(seen);
+
+  console.log(`\n[FINAL] ${newDream.length} dream + ${newStability.length} stability roles to send`);
 
   if (newDream.length || newStability.length) {
     await sendEmail(newDream, newStability);
   } else {
-    console.log("No new roles found this run.");
+    console.log("[DONE] No new roles this run.");
   }
 }
 
