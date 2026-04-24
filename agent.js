@@ -80,7 +80,7 @@ SOURCE PRIORITY:
 - STRONGLY PREFER ATS platforms where companies post directly: Greenhouse (boards.greenhouse.io), Lever (jobs.lever.co), Workday (myworkdayjobs.com), Ashby (jobs.ashbyhq.com), SmartRecruiters, BambooHR
 - Use search queries like: "site:greenhouse.io [company] creative director" or "[company] careers creative director" or "[company] jobs creative director"
 
-AGGREGATOR EXCLUSION — do NOT return results from these domains. If a role only appears on one of these sites, skip it:
+AGGREGATOR EXCLUSION — do NOT return results from these domains. If a role only appears on one of these sites, skip it entirely:
 linkedin.com, indeed.com, glassdoor.com, ziprecruiter.com, simplyhired.com, monster.com, careerbuilder.com, builtin.com, themuse.com, wellfound.com, theladders.com, flexjobs.com`;
 
 const DATE_RULES = `
@@ -99,12 +99,11 @@ The "summary" field should be 2-3 sentences explaining why this is a strong matc
 If no matching roles are found, respond with exactly: NO_NEW_ROLES
 Return only the JSON array or NO_NEW_ROLES — nothing else.`;
 
-// --- Prompt builders ---
+// --- Static content for prompt caching ---
+// These blocks are identical across all batches within a category,
+// so caching them avoids re-processing on batches 2 and 3.
 
-function buildDreamBatchPrompt(companies) {
-  return `You are a job search agent working on behalf of a senior creative professional.
-
-Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.
+const DREAM_STATIC = `You are a job search agent working on behalf of a senior creative professional.
 
 Look for these roles: Creative Director, Design Director, VP Creative, Executive Creative Director, Head of Creative, Art Director (senior), Head of Design.
 
@@ -120,12 +119,8 @@ The candidate profile:
 ${SOURCE_RULES}
 ${DATE_RULES}
 ${JSON_FORMAT}`;
-}
 
-function buildStabilityBatchPrompt(companies) {
-  return `You are a job search agent working on behalf of a senior creative professional.
-
-Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.
+const STABILITY_STATIC = `You are a job search agent working on behalf of a senior creative professional.
 
 Look for these roles: Creative Director, Design Director, Creative Services Director, Head of Creative, Director of Brand.
 
@@ -139,6 +134,21 @@ The candidate profile:
 ${SOURCE_RULES}
 ${DATE_RULES}
 ${JSON_FORMAT}`;
+
+// --- Content builders ---
+
+function buildDreamBatchContent(companies) {
+  return [
+    { type: "text", text: DREAM_STATIC, cache_control: { type: "ephemeral" } },
+    { type: "text", text: `Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.` }
+  ];
+}
+
+function buildStabilityBatchContent(companies) {
+  return [
+    { type: "text", text: STABILITY_STATIC, cache_control: { type: "ephemeral" } },
+    { type: "text", text: `Search the web RIGHT NOW for job listings posted in the last 14 days at these specific companies: ${companies.join(", ")}.` }
+  ];
 }
 
 function buildDreamSweepPrompt() {
@@ -202,7 +212,8 @@ ${JSON_FORMAT}`;
 
 // --- Utility ---
 
-function chunkArray(arr, size) {
+function chunkInto(arr, n) {
+  const size = Math.ceil(arr.length / n);
   const chunks = [];
   for (let i = 0; i < arr.length; i += size) {
     chunks.push(arr.slice(i, i + size));
@@ -210,17 +221,49 @@ function chunkArray(arr, size) {
   return chunks;
 }
 
+// --- Cost tracking ---
+
+let totalInputTokens = 0;
+let totalOutputTokens = 0;
+let totalSearches = 0;
+let totalCost = 0;
+let totalCalls = 0;
+
+const BUDGET_LIMIT = 2.00;
+const INPUT_COST_PER_M = 3.00;
+const OUTPUT_COST_PER_M = 15.00;
+const SEARCH_COST_PER_K = 10.00;
+
 // --- Search ---
 
-async function runSearch(prompt, label) {
+async function runSearch(content, label) {
   console.log(`\n[SEARCH] ${label}`);
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 4000,
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
-      messages: [{ role: "user", content: prompt }]
+      max_tokens: 2000,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+      messages: [{ role: "user", content }]
     });
+
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
+    const searchCount = response.usage?.server_tool_use?.web_search_requests
+      || response.content.filter(b => b.type === "tool_use" && b.name === "web_search").length
+      || 0;
+
+    const callCost = (inputTokens / 1_000_000 * INPUT_COST_PER_M)
+      + (outputTokens / 1_000_000 * OUTPUT_COST_PER_M)
+      + (searchCount / 1000 * SEARCH_COST_PER_K);
+
+    totalInputTokens += inputTokens;
+    totalOutputTokens += outputTokens;
+    totalSearches += searchCount;
+    totalCost += callCost;
+    totalCalls++;
+
+    console.log(`[COST] ${label}: ${inputTokens.toLocaleString()} input + ${outputTokens.toLocaleString()} output tokens + ${searchCount} searches = $${callCost.toFixed(2)}`);
+    console.log(`[BUDGET] Running total: $${totalCost.toFixed(2)}`);
 
     const textBlocks = response.content.filter(b => b.type === "text").map(b => b.text);
     const fullText = textBlocks.join("\n");
@@ -312,7 +355,7 @@ function filterNew(jobs, seen, label) {
 
 // --- Email ---
 
-async function sendEmail(dreamJobs, stabilityJobs) {
+async function sendEmail(dreamJobs, stabilityJobs, aborted) {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -343,7 +386,13 @@ async function sendEmail(dreamJobs, stabilityJobs) {
   };
 
   const totalNew = dreamJobs.length + stabilityJobs.length;
-  if (totalNew === 0) {
+  const abortBanner = aborted ? `
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#856404">
+      <strong>Budget alert:</strong> Run was stopped early after exceeding the $${BUDGET_LIMIT.toFixed(2)} budget limit.
+      Results below are partial. Total estimated cost this run: $${totalCost.toFixed(2)}.
+    </div>` : "";
+
+  if (totalNew === 0 && !aborted) {
     console.log("No new jobs to email.");
     return;
   }
@@ -354,21 +403,26 @@ async function sendEmail(dreamJobs, stabilityJobs) {
       <h1 style="font-size:26px;margin-bottom:4px">Job Agent Alert</h1>
       <p style="color:#666;margin-top:0">${totalNew} new role${totalNew > 1 ? "s" : ""} found matching your criteria</p>
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+      ${abortBanner}
       ${formatJobs(dreamJobs, "Dream Roles")}
       ${formatJobs(stabilityJobs, "Stability Roles")}
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
-      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent &middot; Running twice daily via GitHub Actions</p>
+      <p style="font-size:11px;color:#bbb;text-align:center">Job Agent &middot; Running daily via GitHub Actions</p>
     </div>
   `;
+
+  const subject = aborted
+    ? `Job Agent: Budget alert — run stopped early ($${totalCost.toFixed(2)})`
+    : `Job Agent: ${totalNew} new role${totalNew > 1 ? "s" : ""} found`;
 
   await transporter.sendMail({
     from: process.env.GMAIL_USER,
     to: process.env.NOTIFY_EMAIL,
-    subject: `Job Agent: ${totalNew} new role${totalNew > 1 ? "s" : ""} found`,
+    subject,
     html
   });
 
-  console.log(`\n[EMAIL] Sent with ${totalNew} new roles.`);
+  console.log(`\n[EMAIL] Sent: "${subject}"`);
 }
 
 // --- Main ---
@@ -377,39 +431,89 @@ async function main() {
   console.log("\n=== Job Search Agent Starting ===");
   const seen = loadSeen();
 
-  const dreamBatches = chunkArray(DREAM_COMPANIES, 15);
-  const stabilityBatches = chunkArray(STABILITY_COMPANIES, 15);
+  const dreamBatches = chunkInto(DREAM_COMPANIES, 3);
+  const stabilityBatches = chunkInto(STABILITY_COMPANIES, 3);
 
-  console.log(`\n[PLAN] Dream: ${dreamBatches.length} batches + 1 sweep`);
-  console.log(`[PLAN] Stability: ${stabilityBatches.length} batches + 1 sweep`);
+  console.log(`\n[PLAN] 3 Dream batches + 3 Stability batches + 2 sweeps = 8 total API calls`);
   dreamBatches.forEach((b, i) =>
-    console.log(`  Dream Batch ${i + 1}: ${b.join(", ")}`)
+    console.log(`  Dream Batch ${i + 1} (${b.length} companies): ${b[0]} ... ${b[b.length - 1]}`)
   );
   stabilityBatches.forEach((b, i) =>
-    console.log(`  Stability Batch ${i + 1}: ${b.join(", ")}`)
+    console.log(`  Stability Batch ${i + 1} (${b.length} companies): ${b[0]} ... ${b[b.length - 1]}`)
   );
 
-  // Run all searches in parallel
-  const allSearchPromises = [
-    runSearch(buildDreamSweepPrompt(), "Dream Sweep (broad category)"),
-    runSearch(buildStabilitySweepPrompt(), "Stability Sweep (broad category)"),
-    ...dreamBatches.map((batch, i) =>
-      runSearch(buildDreamBatchPrompt(batch), `Dream Batch ${i + 1}/${dreamBatches.length} [${batch[0]} ... ${batch[batch.length - 1]}]`)
-    ),
-    ...stabilityBatches.map((batch, i) =>
-      runSearch(buildStabilityBatchPrompt(batch), `Stability Batch ${i + 1}/${stabilityBatches.length} [${batch[0]} ... ${batch[batch.length - 1]}]`)
-    )
-  ];
+  const allDreamRaw = [];
+  const allStabilityRaw = [];
+  let aborted = false;
 
-  const allResults = await Promise.all(allSearchPromises);
+  // Sweeps start immediately and run in parallel throughout
+  const dreamSweepPromise = runSearch(buildDreamSweepPrompt(), "Dream Sweep (broad category)");
+  const stabilitySweepPromise = runSearch(buildStabilitySweepPrompt(), "Stability Sweep (broad category)");
 
-  const dreamSweepResults = allResults[0];
-  const stabilitySweepResults = allResults[1];
-  const dreamBatchResults = allResults.slice(2, 2 + dreamBatches.length).flat();
-  const stabilityBatchResults = allResults.slice(2 + dreamBatches.length).flat();
+  // Phase 1: Run batch 1s sequentially to prime the prompt cache
+  console.log("\n[PHASE 1] Priming cache with batch 1s (sequential)...");
 
-  const allDreamRaw = [...dreamBatchResults, ...dreamSweepResults];
-  const allStabilityRaw = [...stabilityBatchResults, ...stabilitySweepResults];
+  const dreamBatch1 = await runSearch(
+    buildDreamBatchContent(dreamBatches[0]),
+    `Dream Batch 1/3 [${dreamBatches[0][0]} ... ${dreamBatches[0][dreamBatches[0].length - 1]}]`
+  );
+  allDreamRaw.push(...dreamBatch1);
+
+  if (totalCost >= BUDGET_LIMIT) {
+    console.log(`[ABORT] Run exceeded $${BUDGET_LIMIT.toFixed(2)} budget after Dream Batch 1, stopping`);
+    aborted = true;
+  }
+
+  if (!aborted) {
+    const stabilityBatch1 = await runSearch(
+      buildStabilityBatchContent(stabilityBatches[0]),
+      `Stability Batch 1/3 [${stabilityBatches[0][0]} ... ${stabilityBatches[0][stabilityBatches[0].length - 1]}]`
+    );
+    allStabilityRaw.push(...stabilityBatch1);
+
+    if (totalCost >= BUDGET_LIMIT) {
+      console.log(`[ABORT] Run exceeded $${BUDGET_LIMIT.toFixed(2)} budget after Stability Batch 1, stopping`);
+      aborted = true;
+    }
+  }
+
+  // Phase 2: Run remaining batches in parallel (cache is now warm)
+  if (!aborted) {
+    console.log("\n[PHASE 2] Running remaining batches in parallel (cache warm)...");
+    const [db2, db3, sb2, sb3] = await Promise.all([
+      runSearch(
+        buildDreamBatchContent(dreamBatches[1]),
+        `Dream Batch 2/3 [${dreamBatches[1][0]} ... ${dreamBatches[1][dreamBatches[1].length - 1]}]`
+      ),
+      runSearch(
+        buildDreamBatchContent(dreamBatches[2]),
+        `Dream Batch 3/3 [${dreamBatches[2][0]} ... ${dreamBatches[2][dreamBatches[2].length - 1]}]`
+      ),
+      runSearch(
+        buildStabilityBatchContent(stabilityBatches[1]),
+        `Stability Batch 2/3 [${stabilityBatches[1][0]} ... ${stabilityBatches[1][stabilityBatches[1].length - 1]}]`
+      ),
+      runSearch(
+        buildStabilityBatchContent(stabilityBatches[2]),
+        `Stability Batch 3/3 [${stabilityBatches[2][0]} ... ${stabilityBatches[2][stabilityBatches[2].length - 1]}]`
+      )
+    ]);
+    allDreamRaw.push(...db2, ...db3);
+    allStabilityRaw.push(...sb2, ...sb3);
+
+    if (totalCost >= BUDGET_LIMIT) {
+      console.log(`[ABORT] Run exceeded $${BUDGET_LIMIT.toFixed(2)} budget during Phase 2`);
+      aborted = true;
+    }
+  }
+
+  // Collect sweep results (have been running since start)
+  const [dreamSweepResults, stabilitySweepResults] = await Promise.all([
+    dreamSweepPromise,
+    stabilitySweepPromise
+  ]);
+  allDreamRaw.push(...dreamSweepResults);
+  allStabilityRaw.push(...stabilitySweepResults);
 
   console.log(`\n[SUMMARY] Raw — Dream: ${allDreamRaw.length}, Stability: ${allStabilityRaw.length}`);
 
@@ -429,8 +533,17 @@ async function main() {
 
   console.log(`\n[FINAL] ${newDream.length} dream + ${newStability.length} stability roles to send`);
 
-  if (newDream.length || newStability.length) {
-    await sendEmail(newDream, newStability);
+  console.log(`\n=== Run Complete ===`);
+  console.log(`[SUMMARY] API calls made: ${totalCalls}`);
+  console.log(`[SUMMARY] Total tokens: ${(totalInputTokens + totalOutputTokens).toLocaleString()} (${totalInputTokens.toLocaleString()} input + ${totalOutputTokens.toLocaleString()} output)`);
+  console.log(`[SUMMARY] Total web searches: ${totalSearches}`);
+  console.log(`[SUMMARY] Total estimated cost: $${totalCost.toFixed(2)}`);
+  if (aborted) {
+    console.log(`[SUMMARY] Run was ABORTED — budget limit of $${BUDGET_LIMIT.toFixed(2)} exceeded`);
+  }
+
+  if (newDream.length || newStability.length || aborted) {
+    await sendEmail(newDream, newStability, aborted);
   } else {
     console.log("[DONE] No new roles this run.");
   }
